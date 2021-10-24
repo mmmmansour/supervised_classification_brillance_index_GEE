@@ -1,0 +1,117 @@
+//research/////////Pour chercher l'image//////////////////////////////////////////////////
+var Dec_whisoutCloud= landsat8.filterDate('2021-01-01', '2021-01-31')
+                  .filterBounds(found)
+
+          ///     .filterMetadata('CLOUD_COVERAGE_ASSESSMENT','equals',90)
+                 
+  print (Dec_whisoutCloud)   
+
+var imtest =ee.ImageCollection(['LANDSAT/LC08/C01/T1_RT_TOA/LC08_204051_20210101','LANDSAT/LC08/C01/T1_RT_TOA/LC08_205050_20210108','LANDSAT/LC08/C01/T1_RT_TOA/LC08_205051_20210108']).mosaic().clipToCollection(found)
+
+
+var trueColor432 = imtest.select(['B7', 'B5', 'B3']);
+////var trueColor432 = trueColor432.clip(found)
+var trueColor432Vis = {
+  min: 0.0,
+  max: 0.4,
+};
+Map.setCenter(-13.09, 13.04, 9);
+Map.addLayer(trueColor432, trueColor432Vis, 'True Color (432)');
+
+  var Janvier2019 =ee.ImageCollection(['LANDSAT/LC08/C01/T1_RT_TOA/LC08_204051_20210101','LANDSAT/LC08/C01/T1_RT_TOA/LC08_205050_20210108','LANDSAT/LC08/C01/T1_RT_TOA/LC08_205051_20210108']).mosaic().clipToCollection(found)
+      /////////////////////INDICE//////////////////////////////////////             
+  // var pt_zone = ee.FeatureCollection([eau,vegetation,solnu]);
+var     CalIndice= Janvier2019.select("B1","B2", "B3", "B4", "B5",'B6','B7',"B8", "B9", "B11")
+ 
+//                  .map(function(image){
+
+
+
+  var IB = CalIndice.expression(
+                  'sqrt(NIR*NIR + RED*RED)', {
+                  'NIR': CalIndice.clip(found).select('B5'),
+                  'RED': CalIndice.clip(found).select('B4')
+                  }).rename('IB');  
+  
+  
+   var CalIndice= CalIndice.addBands([IB]) 
+  
+print('image et indexes',CalIndice)
+ 
+var trueColor432 = CalIndice.select(['B7', 'B6', 'B2']);
+var trueColor432 = trueColor432.clipToCollection(found)
+var trueColor432Vis = {
+  min: 0.0,
+  max: 0.4,
+};
+Map.setCenter(-13.09, 13.04, 9);
+Map.addLayer(trueColor432, trueColor432Vis, 'True Color (432)');
+// Map.addLayer(NDVI)
+// Map.addLayer(NDWI)
+Map.addLayer(IB)
+ 
+ 
+
+print('ee.FeatureCollection',pt_zone);
+ 
+
+var bands = ['B2','B3','B4','B5','B6','B7','B8','B9', 'B11','IB'];
+print(pt_zone)
+
+
+//////////////////////////////////////////////////////////////////////////////////////////////////////
+var pt_zone = ee.FeatureCollection([eau,vegetationdense,vegetationclaire,solnu,sel]);
+print('ee.FeatureCollection',pt_zone);
+ 
+
+var bands = ['B2','B3','B4','B5','B6','B7','B8','B9', 'B11','IB'];
+print(pt_zone)
+
+
+// ////////////////////ui.chart/////////////pour tracer les graphes////csv et autres//////////////////////////
+
+var training = CalIndice.sampleRegions(pt_zone,['Class'],50);
+
+print(training.size());
+
+print( ui.Chart.image.regions({
+  image: CalIndice, 
+  regions: pt_zone,
+  scale:30, 
+
+  seriesProperty: 'Class'
+}));
+
+
+// //////////////CLASSIFICATION DE L'image///////////////
+
+var classifier = ee.Classifier.smileCart()//ee.Classifier.libsvm()
+ 
+var trained=  classifier.train({
+  features:training,
+  classProperty:'Class',
+  inputProperties: ['B2','B3','B4','B5','B6','B7','B8','B9','B11','IB']
+  });
+  
+  
+var classified= CalIndice.select(bands).classify(trained)
+ 
+Map.addLayer(classified,{min:0,max:4,palette: ['1315d2','299b11','21fb00','ffdf27','aebdfb']},'CalIndice')
+var classified1= CalIndice.select(bands).classify(trained)
+///pour seuiller limage///////////
+var classified = classified1.focal_median(100,'circle','meters'   )
+////////////////////////////////////////////////////////////////
+print('test classif',classified);
+ 
+Map.addLayer(classified,{min:0,max:4,palette: ['1315d2','299b11','21fb00','ffdf27','aebdfb']},'CalIndice')
+ 
+
+print(trained.confusionMatrix())
+
+Export.image.toDrive({
+image:classified,
+description:'CalIndice',
+region:found,
+scale:10,
+maxPixels:1e9
+});
