@@ -1,1 +1,1 @@
-# supervised_classification_burn_area_index
+# supervised_classification_brillance_index_GEE
